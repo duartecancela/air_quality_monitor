@@ -52,6 +52,8 @@ void loop() {
     float temperature = dht.readTemperature();
     float humidity = dht.readHumidity();
 
+    int soundLevel = analogRead(SOUND_PIN);
+
     // Debug output to Serial Monitor
   Serial.println("=== Sensor Values ===");
   Serial.print("Temperature: ");
@@ -61,6 +63,10 @@ void loop() {
   Serial.print(humidity);
   Serial.println(" %");
 
+  Serial.print("Sound Level: ");
+  Serial.print(soundLevel);
+  Serial.println(" (analog value)");
+
   // LED control for temperature
     digitalWrite(TEMP_LED_GREEN, temperature <= TEMP_THRESHOLD);
     digitalWrite(TEMP_LED_RED, temperature > TEMP_THRESHOLD);
@@ -68,6 +74,13 @@ void loop() {
     // LED control for humidity
     digitalWrite(HUM_LED_GREEN, humidity <= HUM_THRESHOLD);
     digitalWrite(HUM_LED_RED, humidity > HUM_THRESHOLD);
+
+
+
+
+    // LED control for sound level
+    digitalWrite(SOUND_LED_GREEN, soundLevel <= SOUND_THRESHOLD);
+    digitalWrite(SOUND_LED_RED, soundLevel > SOUND_THRESHOLD);
 
     delay(1000);
 }
