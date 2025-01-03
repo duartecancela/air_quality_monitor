@@ -82,5 +82,5 @@ void loop() {
     digitalWrite(SOUND_LED_GREEN, soundLevel <= SOUND_THRESHOLD);
     digitalWrite(SOUND_LED_RED, soundLevel > SOUND_THRESHOLD);
 
-    delay(1000);
+    delay(250);
 }
