@@ -41,7 +41,7 @@ PubSubClient client(espClient);
 // Sleep mode configuration
 #define SLEEP_TIME 10e6 // Sleep time in microseconds (10 seconds)
 #define INACTIVITY_THRESHOLD 5 // Number of stable readings before entering sleep
-#define MQ135_THRESHOLD 410 // Threshold for poor air quality
+#define MQ135_THRESHOLD 600 // Threshold for poor air quality
 #define TEMP_THRESHOLD 30 // Temperature threshold for LED indication
 #define HUM_THRESHOLD 60 // Humidity threshold for LED indication
 #define SOUND_THRESHOLD 600 // Sound level threshold for LED indication
@@ -55,6 +55,8 @@ float prevTemperature = -1000, prevHumidity = -1000;
 int prevAirQuality = -1, prevSoundLevel = -1;
 int noChangeCounter = 0;
 bool buzzerDisabled = false;
+unsigned long lastSwitchTime = 0; // Last time display switched
+bool showTempHum = true;         // Alternate display between temperature/humidity and air/sound
 
 // Function to connect to Wi-Fi
 void setup_wifi() {
@@ -186,14 +188,30 @@ void loop() {
         digitalWrite(BUZZER_PIN, LOW);
     }
 
-    // Display values on LCD
-    lcd.setCursor(0, 0);
-    lcd.print("Temp: ");
-    lcd.print(temperature);
-    lcd.print("C");
-    lcd.setCursor(0, 1);
-    lcd.print("Humidity: ");
-    lcd.print(humidity);
+    // Control LCD display switching every 2 seconds
+    if (millis() - lastSwitchTime >= 4000) { // Switch display every 2 seconds
+        lastSwitchTime = millis();           // Update the last switch time
+        showTempHum = !showTempHum;          // Toggle display state
+    }
+
+    if (showTempHum) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Temp: ");
+        lcd.print(temperature);
+        lcd.print("C");
+        lcd.setCursor(0, 1);
+        lcd.print("Humidity: ");
+        lcd.print(humidity);
+    } else {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Air: ");
+        lcd.print(airQuality);
+        lcd.setCursor(0, 1);
+        lcd.print("Sound: ");
+        lcd.print(soundLevel);
+    }
 
     // Publish sensor values to MQTT broker
     char message[100];
