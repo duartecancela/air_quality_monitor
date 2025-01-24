@@ -56,6 +56,8 @@ int prevAirQuality = -1, prevSoundLevel = -1;
 int noChangeCounter = 0;
 bool buzzerDisabled = false;
 unsigned long lastSwitchTime = 0; // Last time display switched
+unsigned long alertStartTime = 0; // Timestamp of the alert start
+bool isAlertActive = false;      // State of the alert on the LCD
 bool showTempHum = true;         // Alternate display between temperature/humidity and air/sound
 
 // Function to connect to Wi-Fi
@@ -127,6 +129,8 @@ void loop() {
     // Check button to disable buzzer
     if (digitalRead(BUTTON_PIN) == LOW) {
         buzzerDisabled = true;
+        isAlertActive = false; // Clear the alert state
+        lcd.clear();           // Clear the LCD
         Serial.println("Button pressed: Buzzer disabled.");
         digitalWrite(BUZZER_PIN, LOW);
         delay(500); // Debounce delay
@@ -180,37 +184,53 @@ void loop() {
     digitalWrite(SOUND_LED_GREEN, soundLevel <= SOUND_THRESHOLD);
     digitalWrite(SOUND_LED_RED, soundLevel > SOUND_THRESHOLD);
 
-    // Control buzzer for air quality
-    if (airQuality > MQ135_THRESHOLD && !buzzerDisabled) {
-        digitalWrite(BUZZER_PIN, HIGH);
-        Serial.println("ALERT! Poor air quality detected.");
+    // Control buzzer and alert for air quality
+    if (airQuality > MQ135_THRESHOLD) {
+        if (!buzzerDisabled) {
+            digitalWrite(BUZZER_PIN, HIGH); // Activate the buzzer
+            Serial.println("ALERT! Poor air quality detected.");
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("ALERT!");
+            lcd.setCursor(0, 1);
+            lcd.print("Poor Air Quality");
+            isAlertActive = true;
+            alertStartTime = millis(); // Record when the alert started
+        }
     } else {
-        digitalWrite(BUZZER_PIN, LOW);
+        digitalWrite(BUZZER_PIN, LOW); // Deactivate the buzzer
+        buzzerDisabled = false;       // Reset buzzer state
+        if (isAlertActive && millis() - alertStartTime >= 3000) { // Alert lasts 3 seconds
+            isAlertActive = false; // End the alert
+            lcd.clear();           // Clear the LCD for normal display
+        }
     }
 
     // Control LCD display switching every 2 seconds
-    if (millis() - lastSwitchTime >= 4000) { // Switch display every 2 seconds
-        lastSwitchTime = millis();           // Update the last switch time
-        showTempHum = !showTempHum;          // Toggle display state
-    }
+    if (!isAlertActive) {
+        if (millis() - lastSwitchTime >= 2000) { // Switch display every 2 seconds
+            lastSwitchTime = millis();           // Update the last switch time
+            showTempHum = !showTempHum;          // Toggle display state
+        }
 
-    if (showTempHum) {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Temp: ");
-        lcd.print(temperature);
-        lcd.print("C");
-        lcd.setCursor(0, 1);
-        lcd.print("Humidity: ");
-        lcd.print(humidity);
-    } else {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Air: ");
-        lcd.print(airQuality);
-        lcd.setCursor(0, 1);
-        lcd.print("Sound: ");
-        lcd.print(soundLevel);
+        if (showTempHum) {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Temp: ");
+            lcd.print(temperature);
+            lcd.print("C");
+            lcd.setCursor(0, 1);
+            lcd.print("Humidity: ");
+            lcd.print(humidity);
+        } else {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Air: ");
+            lcd.print(airQuality);
+            lcd.setCursor(0, 1);
+            lcd.print("Sound: ");
+            lcd.print(soundLevel);
+        }
     }
 
     // Publish sensor values to MQTT broker
@@ -231,3 +251,4 @@ void loop() {
 
     delay(1000); // Delay between readings
 }
+
