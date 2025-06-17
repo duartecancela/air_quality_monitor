@@ -283,10 +283,11 @@ void loop()
     ledcWrite(PWM_CHANNEL, pwmValue);
 
     // Publish sensor values to MQTT broker
-    char message[150]; // Increase buffer size to accommodate new data
-    sprintf(message, "{\"temperature\":%.1f,\"humidity\":%.1f,\"airQuality\":%d,\"soundLevel\":%d,\"pwm\":%d}",
-            temperature, humidity, airQuality, soundLevel, pwmValue);
-    client.publish("sensor/values", message);
+    client.publish("sensor/temperature", String(temperature, 1).c_str());
+    client.publish("sensor/humidity", String(humidity, 1).c_str());
+    client.publish("sensor/airQuality", String(airQuality).c_str());
+    client.publish("sensor/soundLevel", String(soundLevel).c_str());
+    client.publish("sensor/pwm", String(pwmValue).c_str());
 
     // Debug output to Serial Monitor
     Serial.print("Temperature: ");
