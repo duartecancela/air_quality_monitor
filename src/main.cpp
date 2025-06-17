@@ -216,6 +216,17 @@ void loop()
     digitalWrite(SOUND_LED_GREEN, soundLevel <= SOUND_THRESHOLD);
     digitalWrite(SOUND_LED_RED, soundLevel > SOUND_THRESHOLD);
 
+    // Construct a JSON object with the current LED states
+    String ledStates = "{";
+    ledStates += "\"temperature\":\"" + String(temperature > TEMP_THRESHOLD ? "RED" : "GREEN") + "\",";
+    ledStates += "\"humidity\":\"" + String(humidity > HUM_THRESHOLD ? "RED" : "GREEN") + "\",";
+    ledStates += "\"co2\":\"" + String(airQuality > MQ135_THRESHOLD ? "RED" : "GREEN") + "\",";
+    ledStates += "\"noise\":\"" + String(soundLevel > SOUND_THRESHOLD ? "RED" : "GREEN") + "\"";
+    ledStates += "}";
+
+    // Publish the LED states to the 'status/leds' topic as a single JSON message
+    client.publish("status/leds", ledStates.c_str());
+
     // Control buzzer and alert for air quality
     if (airQuality > MQ135_THRESHOLD)
     {
