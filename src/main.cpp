@@ -227,6 +227,15 @@ void loop()
     // Publish the LED states to the 'status/leds' topic as a single JSON message
     client.publish("status/leds", ledStates.c_str());
 
+    // Determine the current state of the buzzer (HIGH = ON, LOW = OFF)
+    String buzzerState = digitalRead(BUZZER_PIN) == HIGH ? "ON" : "OFF";
+
+    // Create a JSON payload with the buzzer state
+    String buzzerPayload = "{\"state\":\"" + buzzerState + "\"}";
+
+    // Publish the buzzer state to the 'status/buzzer' topic
+    client.publish("status/buzzer", buzzerPayload.c_str());
+
     // Control buzzer and alert for air quality
     if (airQuality > MQ135_THRESHOLD)
     {
