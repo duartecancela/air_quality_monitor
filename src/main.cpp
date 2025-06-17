@@ -11,6 +11,7 @@
 #define SOUND_PIN 34  // Pin for sound sensor
 #define BUZZER_PIN 13 // Pin for buzzer
 #define BUTTON_PIN 12 // Pin for button to disable buzzer and wake ESP32
+#define FAN_PIN 21    // Pin for fan motor
 
 // LCD Parallel Pin Definitions
 #define RS 14 // LCD RS pin
@@ -29,12 +30,6 @@
 #define AIR_LED_RED 25     // Red LED for air quality
 #define SOUND_LED_GREEN 26 // Green LED for sound level
 #define SOUND_LED_RED 23   // Red LED for sound level
-
-// Define motor PWM parameters
-#define MOTOR_PWM_PIN 21 // PWM pin for motor (ENA on L298N)
-#define PWM_CHANNEL 0    // PWM channel (0-15)
-#define PWM_FREQ 3000    // PWM frequency (optimized for L298N)
-#define PWM_RESOLUTION 8 // PWM resolution (8 bits = 0 to 255)
 
 // Define MQ-135 sensor thresholds
 #define MQ135_BASE 400 // Baseline sensor value (motor off)
@@ -113,9 +108,9 @@ void setup()
     Serial.begin(115200);
     Serial.println("Initializing sensors, LEDs, buzzer, button, and LCD...");
 
-    // Configure the PWM channel
-    ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(MOTOR_PWM_PIN, PWM_CHANNEL);
+    // Config fan pin state
+    pinMode(FAN_PIN, OUTPUT);
+    digitalWrite(FAN_PIN, LOW); // Ensure fan is off at startup
 
     // Initialize Wi-Fi and MQTT
     setup_wifi();
@@ -295,19 +290,19 @@ void loop()
         }
     }
 
-    // Map the sensor reading to the PWM range
-    int pwmValue = map(airQuality, MQ135_BASE, MQ135_MAX, PWM_MIN, PWM_MAX);
-    pwmValue = constrain(pwmValue, PWM_MIN, PWM_MAX); // Ensure value is within 0-255
+    // Turn the fan ON if air quality is above the threshold, otherwise turn it OFF
+    bool fanState = airQuality > MQ135_THRESHOLD;
+    digitalWrite(FAN_PIN, fanState);
 
-    // Apply PWM to the motor
-    ledcWrite(PWM_CHANNEL, pwmValue);
+    // Create a JSON payload and publish fan state to MQTT
+    String fanPayload = "{\"state\":\"" + String(fanState ? "ON" : "OFF") + "\"}";
+    client.publish("status/fan", fanPayload.c_str());
 
     // Publish sensor values to MQTT broker
     client.publish("sensor/temperature", String(temperature, 1).c_str());
     client.publish("sensor/humidity", String(humidity, 1).c_str());
     client.publish("sensor/airQuality", String(airQuality).c_str());
     client.publish("sensor/soundLevel", String(soundLevel).c_str());
-    client.publish("sensor/pwm", String(pwmValue).c_str());
 
     // Debug output to Serial Monitor
     Serial.print("Temperature: ");
@@ -318,8 +313,7 @@ void loop()
     Serial.println(airQuality);
     Serial.print("Sound Level: ");
     Serial.println(soundLevel);
-    Serial.print("PWM Output: ");
-    Serial.println(pwmValue);
+
 
     delay(1000); // Delay between readings
 }
