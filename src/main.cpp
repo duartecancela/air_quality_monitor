@@ -48,10 +48,12 @@ PubSubClient client(espClient);
 // Sleep mode configuration
 #define SLEEP_TIME 10e6        // Sleep time in microseconds (10 seconds)
 #define INACTIVITY_THRESHOLD 5 // Number of stable readings before entering sleep
-#define MQ135_THRESHOLD 550    // Threshold for poor air quality
-#define TEMP_THRESHOLD 30      // Temperature threshold for LED indication
-#define HUM_THRESHOLD 60       // Humidity threshold for LED indication
-#define SOUND_THRESHOLD 600    // Sound level threshold for LED indication
+
+// Threshold values (can be updated remotely via MQTT)
+float TEMP_THRESHOLD = 30;
+float HUM_THRESHOLD = 60;
+int MQ135_THRESHOLD = 550;
+int SOUND_THRESHOLD = 600;
 
 // Initialize sensors and display in 4-bit mode
 DHT dht(DHTPIN, DHTTYPE);
@@ -66,6 +68,44 @@ unsigned long lastSwitchTime = 0; // Last time display switched
 unsigned long alertStartTime = 0; // Timestamp of the alert start
 bool isAlertActive = false;       // State of the alert on the LCD
 bool showTempHum = true;          // Alternate display between temperature/humidity and air/sound
+
+// MQTT callback to handle threshold update messages
+void mqttCallback(char *topic, byte *payload, unsigned int length)
+{
+    payload[length] = '\0'; // Ensure string termination
+    String message = String((char *)payload);
+    Serial.print("[MQTT RECEIVED] ");
+    Serial.print(topic);
+    Serial.print(" -> ");
+    Serial.println(message);
+
+    // Extract "value" from JSON
+    int valueStart = message.indexOf(":") + 1;
+    int valueEnd = message.indexOf("}");
+    if (valueStart > 0 && valueEnd > valueStart)
+    {
+        float value = message.substring(valueStart, valueEnd).toFloat();
+
+        // Match topic and update corresponding threshold
+        if (String(topic) == "config/threshold/temperature")
+            TEMP_THRESHOLD = value;
+        else if (String(topic) == "config/threshold/humidity")
+            HUM_THRESHOLD = value;
+        else if (String(topic) == "config/threshold/co2")
+            MQ135_THRESHOLD = (int)value;
+        else if (String(topic) == "config/threshold/noise")
+            SOUND_THRESHOLD = (int)value;
+
+        Serial.print("[THRESHOLD UPDATED] ");
+        Serial.print(topic);
+        Serial.print(" = ");
+        Serial.println(value);
+    }
+    else
+    {
+        Serial.println("[ERROR] Invalid JSON format");
+    }
+}
 
 // Function to connect to Wi-Fi
 void setup_wifi()
@@ -92,6 +132,12 @@ void reconnect()
         if (client.connect("ESP32Client"))
         {
             Serial.println("Connected!");
+
+            // 🔁 Resubscribe to topics after reconnection
+            client.subscribe("config/threshold/temperature");
+            client.subscribe("config/threshold/humidity");
+            client.subscribe("config/threshold/co2");
+            client.subscribe("config/threshold/noise");
         }
         else
         {
@@ -102,6 +148,7 @@ void reconnect()
         }
     }
 }
+
 
 void setup()
 {
@@ -115,6 +162,15 @@ void setup()
     // Initialize Wi-Fi and MQTT
     setup_wifi();
     client.setServer(mqtt_server, 1883);
+
+    // Set MQTT message callback function
+    client.setCallback(mqttCallback);
+
+    // Subscribe to configuration topics for threshold updates
+    client.subscribe("config/threshold/temperature");
+    client.subscribe("config/threshold/humidity");
+    client.subscribe("config/threshold/co2");
+    client.subscribe("config/threshold/noise");
 
     // Initialize LEDs
     pinMode(TEMP_LED_GREEN, OUTPUT);
@@ -299,16 +355,15 @@ void loop()
     client.publish("status/fan", fanPayload.c_str());
 
     // Build a JSON object containing the configured thresholds for each parameter
-String thresholdsPayload = "{";
-thresholdsPayload += "\"temperature\":" + String(TEMP_THRESHOLD) + ",";
-thresholdsPayload += "\"humidity\":" + String(HUM_THRESHOLD) + ",";
-thresholdsPayload += "\"co2\":" + String(MQ135_THRESHOLD) + ",";
-thresholdsPayload += "\"noise\":" + String(SOUND_THRESHOLD);
-thresholdsPayload += "}";
+    String thresholdsPayload = "{";
+    thresholdsPayload += "\"temperature\":" + String(TEMP_THRESHOLD) + ",";
+    thresholdsPayload += "\"humidity\":" + String(HUM_THRESHOLD) + ",";
+    thresholdsPayload += "\"co2\":" + String(MQ135_THRESHOLD) + ",";
+    thresholdsPayload += "\"noise\":" + String(SOUND_THRESHOLD);
+    thresholdsPayload += "}";
 
-// Publish the threshold values to the 'status/thresholds' topic
-client.publish("status/thresholds", thresholdsPayload.c_str());
-
+    // Publish the threshold values to the 'status/thresholds' topic
+    client.publish("status/thresholds", thresholdsPayload.c_str());
 
     // Publish sensor values to MQTT broker
     client.publish("sensor/temperature", String(temperature, 1).c_str());
@@ -325,7 +380,6 @@ client.publish("status/thresholds", thresholdsPayload.c_str());
     Serial.println(airQuality);
     Serial.print("Sound Level: ");
     Serial.println(soundLevel);
-
 
     delay(1000); // Delay between readings
 }
