@@ -375,11 +375,11 @@ void loop()
 
     char airPayload[32];
     snprintf(airPayload, sizeof(airPayload), "{\"value\":%d}", airQuality);
-    client.publish("sensors/airQuality", airPayload);
+    client.publish("sensors/co2", airPayload);
 
     char soundPayload[32];
     snprintf(soundPayload, sizeof(soundPayload), "{\"value\":%d}", soundLevel);
-    client.publish("sensors/soundLevel", soundPayload);
+    client.publish("sensors/noise", soundPayload);
 
     // Debug output to Serial Monitor
     Serial.print("Temperature: ");
