@@ -71,6 +71,7 @@ bool showTempHum = true;          // Alternate display between temperature/humid
 bool fanState = false;
 bool buzzerState = false;
 bool buzzerManualOverride = false; // false = auto (sensor); true = manual (MQTT)
+bool fanManualOverride = false;    // false = auto; true = manual
 
 // MQTT callback to handle threshold update messages
 void mqttCallback(char *topic, byte *payload, unsigned int length)
@@ -95,8 +96,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 
         if (String(topic) == "actuator/fan")
         {
-            digitalWrite(FAN_PIN, isOn ? HIGH : LOW);
+            fanManualOverride = true; // Activates manual mode
             fanState = isOn;
+            digitalWrite(FAN_PIN, isOn ? HIGH : LOW);
 
             // Publish updated fan state
             char fanBuffer[32];
@@ -106,60 +108,17 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 
         if (String(topic) == "actuator/buzzer")
         {
-            buzzerManualOverride = true;
-
-            String command = "";
-            for (unsigned int i = 0; i < length; i++)
-            {
-                command += (char)payload[i];
-            }
-
-            bool isOn = (command == "ON");
+            buzzerManualOverride = true; // Activates manual mode
             buzzerState = isOn;
             digitalWrite(BUZZER_PIN, isOn ? HIGH : LOW);
 
+            // Publish updated buzzer state
             char buzzerBuffer[32];
             snprintf(buzzerBuffer, sizeof(buzzerBuffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
             client.publish("status/buzzer", buzzerBuffer);
         }
 
         return;
-    }
-
-    // Handle simple ON/OFF commands for fan and buzzer
-    if (String(topic) == "actuator/fan" || String(topic) == "actuator/buzzer")
-    {
-        String command = "";
-        for (unsigned int i = 0; i < length; i++)
-        {
-            command += (char)payload[i];
-        }
-
-        bool isOn = (command == "ON");
-
-        if (String(topic) == "actuator/fan")
-        {
-            digitalWrite(FAN_PIN, isOn ? HIGH : LOW);
-            fanState = isOn;
-
-            // Publish fan state
-            char buffer[32];
-            snprintf(buffer, sizeof(buffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
-            client.publish("status/fan", buffer);
-        }
-
-        if (String(topic) == "actuator/buzzer")
-        {
-            digitalWrite(BUZZER_PIN, isOn ? HIGH : LOW);
-            buzzerState = isOn;
-
-            // Publish buzzer state
-            char buffer[32];
-            snprintf(buffer, sizeof(buffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
-            client.publish("status/buzzer", buffer);
-        }
-
-        return; // Skip further processing if this was a fan/buzzer command
     }
 
     // Extract "value" from JSON
@@ -257,8 +216,8 @@ void setup()
     client.subscribe("config/threshold/co2");
     client.subscribe("config/threshold/noise");
 
-    client.subscribe("actuator/fan"); // Also subscribe during setup
-    client.subscribe("actuator/buzzer");
+    client.subscribe("actuator/fan");    // Also subscribe during setup
+    client.subscribe("actuator/buzzer"); // Also subscribe during setup
 
     // Initialize LEDs
     pinMode(TEMP_LED_GREEN, OUTPUT);
@@ -440,7 +399,11 @@ void loop()
     }
 
     // Turn the fan ON if air quality is above the threshold, otherwise turn it OFF
-    bool fanState = airQuality > MQ135_THRESHOLD;
+    if (!fanManualOverride)
+    {
+        fanState = airQuality > MQ135_THRESHOLD;
+    }
+
     digitalWrite(FAN_PIN, fanState);
 
     // Create a JSON payload and publish fan state to MQTT
