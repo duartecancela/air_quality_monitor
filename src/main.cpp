@@ -87,20 +87,46 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
     if (String(topic) == "actuator/fan" || String(topic) == "actuator/buzzer")
     {
         String command = "";
+
         for (unsigned int i = 0; i < length; i++)
         {
             command += (char)payload[i];
         }
 
-        bool isOn = (command == "ON");
+        command.trim(); // Remove whitespace
+
+        bool isOn = false;
+
+        // Check if the payload is JSON (e.g., {"state":"ON"})
+        if (command.startsWith("{"))
+        {
+            int pos = command.indexOf(":");
+            int end = command.indexOf("}");
+
+            if (pos > 0 && end > pos)
+            {
+                String value = command.substring(pos + 1, end);
+                value.replace("\"", ""); // Remove quotes
+                value.trim();
+                isOn = (value == "ON");
+            }
+            else
+            {
+                Serial.println("[ERROR] Invalid JSON for actuator command.");
+                return;
+            }
+        }
+        else
+        {
+            isOn = (command == "ON");
+        }
 
         if (String(topic) == "actuator/fan")
         {
-            fanManualOverride = true; // Activates manual mode
-            fanState = isOn;
+            fanManualOverride = true;
             digitalWrite(FAN_PIN, isOn ? HIGH : LOW);
+            fanState = isOn;
 
-            // Publish updated fan state
             char fanBuffer[32];
             snprintf(fanBuffer, sizeof(fanBuffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
             client.publish("status/fan", fanBuffer);
@@ -108,11 +134,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 
         if (String(topic) == "actuator/buzzer")
         {
-            buzzerManualOverride = true; // Activates manual mode
-            buzzerState = isOn;
+            buzzerManualOverride = true;
             digitalWrite(BUZZER_PIN, isOn ? HIGH : LOW);
+            buzzerState = isOn;
 
-            // Publish updated buzzer state
             char buzzerBuffer[32];
             snprintf(buzzerBuffer, sizeof(buzzerBuffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
             client.publish("status/buzzer", buzzerBuffer);
