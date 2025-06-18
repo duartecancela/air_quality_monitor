@@ -68,6 +68,9 @@ unsigned long lastSwitchTime = 0; // Last time display switched
 unsigned long alertStartTime = 0; // Timestamp of the alert start
 bool isAlertActive = false;       // State of the alert on the LCD
 bool showTempHum = true;          // Alternate display between temperature/humidity and air/sound
+bool fanState = false;
+bool buzzerState = false;
+bool buzzerManualOverride = false; // false = auto (sensor); true = manual (MQTT)
 
 // MQTT callback to handle threshold update messages
 void mqttCallback(char *topic, byte *payload, unsigned int length)
@@ -78,6 +81,86 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
     Serial.print(topic);
     Serial.print(" -> ");
     Serial.println(message);
+
+    // Handle simple actuator commands without JSON
+    if (String(topic) == "actuator/fan" || String(topic) == "actuator/buzzer")
+    {
+        String command = "";
+        for (unsigned int i = 0; i < length; i++)
+        {
+            command += (char)payload[i];
+        }
+
+        bool isOn = (command == "ON");
+
+        if (String(topic) == "actuator/fan")
+        {
+            digitalWrite(FAN_PIN, isOn ? HIGH : LOW);
+            fanState = isOn;
+
+            // Publish updated fan state
+            char fanBuffer[32];
+            snprintf(fanBuffer, sizeof(fanBuffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
+            client.publish("status/fan", fanBuffer);
+        }
+
+        if (String(topic) == "actuator/buzzer")
+        {
+            buzzerManualOverride = true;
+
+            String command = "";
+            for (unsigned int i = 0; i < length; i++)
+            {
+                command += (char)payload[i];
+            }
+
+            bool isOn = (command == "ON");
+            buzzerState = isOn;
+            digitalWrite(BUZZER_PIN, isOn ? HIGH : LOW);
+
+            char buzzerBuffer[32];
+            snprintf(buzzerBuffer, sizeof(buzzerBuffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
+            client.publish("status/buzzer", buzzerBuffer);
+        }
+
+        return;
+    }
+
+    // Handle simple ON/OFF commands for fan and buzzer
+    if (String(topic) == "actuator/fan" || String(topic) == "actuator/buzzer")
+    {
+        String command = "";
+        for (unsigned int i = 0; i < length; i++)
+        {
+            command += (char)payload[i];
+        }
+
+        bool isOn = (command == "ON");
+
+        if (String(topic) == "actuator/fan")
+        {
+            digitalWrite(FAN_PIN, isOn ? HIGH : LOW);
+            fanState = isOn;
+
+            // Publish fan state
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
+            client.publish("status/fan", buffer);
+        }
+
+        if (String(topic) == "actuator/buzzer")
+        {
+            digitalWrite(BUZZER_PIN, isOn ? HIGH : LOW);
+            buzzerState = isOn;
+
+            // Publish buzzer state
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "{\"state\":\"%s\"}", isOn ? "ON" : "OFF");
+            client.publish("status/buzzer", buffer);
+        }
+
+        return; // Skip further processing if this was a fan/buzzer command
+    }
 
     // Extract "value" from JSON
     int valueStart = message.indexOf(":") + 1;
@@ -138,6 +221,9 @@ void reconnect()
             client.subscribe("config/threshold/humidity");
             client.subscribe("config/threshold/co2");
             client.subscribe("config/threshold/noise");
+
+            client.subscribe("actuator/fan");    // Subscribe to fan control topic
+            client.subscribe("actuator/buzzer"); // Subscribe to buzzer control topic
         }
         else
         {
@@ -170,6 +256,9 @@ void setup()
     client.subscribe("config/threshold/humidity");
     client.subscribe("config/threshold/co2");
     client.subscribe("config/threshold/noise");
+
+    client.subscribe("actuator/fan"); // Also subscribe during setup
+    client.subscribe("actuator/buzzer");
 
     // Initialize LEDs
     pinMode(TEMP_LED_GREEN, OUTPUT);
@@ -287,29 +376,34 @@ void loop()
     client.publish("status/buzzer", buzzerPayload.c_str());
 
     // Control buzzer and alert for air quality
-    if (airQuality > MQ135_THRESHOLD)
+    if (!buzzerManualOverride)
     {
-        if (!buzzerDisabled)
+        if (airQuality > MQ135_THRESHOLD)
         {
-            digitalWrite(BUZZER_PIN, HIGH); // Activate the buzzer
-            Serial.println("ALERT! Poor air quality detected.");
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("ALERT!");
-            lcd.setCursor(0, 1);
-            lcd.print("Poor Air Quality");
-            isAlertActive = true;
-            alertStartTime = millis(); // Record when the alert started
+            if (!buzzerDisabled)
+            {
+                digitalWrite(BUZZER_PIN, HIGH);
+                buzzerState = true;
+                Serial.println("ALERT! Poor air quality detected.");
+                lcd.clear();
+                lcd.setCursor(0, 0);
+                lcd.print("ALERT!");
+                lcd.setCursor(0, 1);
+                lcd.print("Poor Air Quality");
+                isAlertActive = true;
+                alertStartTime = millis();
+            }
         }
-    }
-    else
-    {
-        digitalWrite(BUZZER_PIN, LOW); // Deactivate the buzzer
-        buzzerDisabled = false;        // Reset buzzer state when air quality is safe
-        if (isAlertActive && millis() - alertStartTime >= 3000)
-        {                          // Alert lasts 3 seconds
-            isAlertActive = false; // End the alert
-            lcd.clear();           // Clear the LCD for normal display
+        else
+        {
+            digitalWrite(BUZZER_PIN, LOW);
+            buzzerState = false;
+            buzzerDisabled = false;
+            if (isAlertActive && millis() - alertStartTime >= 3000)
+            {
+                isAlertActive = false;
+                lcd.clear();
+            }
         }
     }
 
