@@ -149,7 +149,6 @@ void reconnect()
     }
 }
 
-
 void setup()
 {
     Serial.begin(115200);
@@ -366,10 +365,21 @@ void loop()
     client.publish("status/thresholds", thresholdsPayload.c_str());
 
     // Publish sensor values to MQTT broker
-    client.publish("sensor/temperature", String(temperature, 1).c_str());
-    client.publish("sensor/humidity", String(humidity, 1).c_str());
-    client.publish("sensor/airQuality", String(airQuality).c_str());
-    client.publish("sensor/soundLevel", String(soundLevel).c_str());
+    char tempPayload[32];
+    snprintf(tempPayload, sizeof(tempPayload), "{\"value\":%.1f}", temperature);
+    client.publish("sensors/temperature", tempPayload);
+
+    char humPayload[32];
+    snprintf(humPayload, sizeof(humPayload), "{\"value\":%.1f}", humidity);
+    client.publish("sensors/humidity", humPayload);
+
+    char airPayload[32];
+    snprintf(airPayload, sizeof(airPayload), "{\"value\":%d}", airQuality);
+    client.publish("sensors/airQuality", airPayload);
+
+    char soundPayload[32];
+    snprintf(soundPayload, sizeof(soundPayload), "{\"value\":%d}", soundLevel);
+    client.publish("sensors/soundLevel", soundPayload);
 
     // Debug output to Serial Monitor
     Serial.print("Temperature: ");
