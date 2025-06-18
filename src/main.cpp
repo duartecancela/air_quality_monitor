@@ -298,6 +298,18 @@ void loop()
     String fanPayload = "{\"state\":\"" + String(fanState ? "ON" : "OFF") + "\"}";
     client.publish("status/fan", fanPayload.c_str());
 
+    // Build a JSON object containing the configured thresholds for each parameter
+String thresholdsPayload = "{";
+thresholdsPayload += "\"temperature\":" + String(TEMP_THRESHOLD) + ",";
+thresholdsPayload += "\"humidity\":" + String(HUM_THRESHOLD) + ",";
+thresholdsPayload += "\"co2\":" + String(MQ135_THRESHOLD) + ",";
+thresholdsPayload += "\"noise\":" + String(SOUND_THRESHOLD);
+thresholdsPayload += "}";
+
+// Publish the threshold values to the 'status/thresholds' topic
+client.publish("status/thresholds", thresholdsPayload.c_str());
+
+
     // Publish sensor values to MQTT broker
     client.publish("sensor/temperature", String(temperature, 1).c_str());
     client.publish("sensor/humidity", String(humidity, 1).c_str());
