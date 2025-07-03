@@ -37,7 +37,11 @@
 #define PWM_MIN 0      // Minimum PWM (motor off)
 #define PWM_MAX 255    // Maximum PWM (motor full speed)
 
-// MQTT Configuration
+// MQTT credentials
+const char* mqtt_user = "esp32user";      // mqtt broker username
+const char* mqtt_pass = "password";      // mqtt broker password
+
+// WIFI Configuration
 const char *ssid = "WIFI_PRINTER";         // Wi-Fi SSID
 const char *password = "c4nc3l477";        // Wi-Fi Password
 const char *mqtt_server = "192.168.1.110"; // MQTT broker IP
@@ -196,7 +200,7 @@ void reconnect()
     while (!client.connected())
     {
         Serial.print("Connecting to MQTT broker...");
-        if (client.connect("ESP32Client"))
+        if (client.connect("ESP32Client, mqtt_user, mqtt_pass"))
         {
             Serial.println("Connected!");
 
