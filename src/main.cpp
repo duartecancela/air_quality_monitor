@@ -44,7 +44,7 @@ const char* mqtt_pass = "password";      // mqtt broker password
 // WIFI Configuration
 const char *ssid = "WIFI_PRINTER";         // Wi-Fi SSID
 const char *password = "c4nc3l477";        // Wi-Fi Password
-const char *mqtt_server = "192.168.1.110"; // MQTT broker IP
+const char *mqtt_server = "192.168.1.171"; // MQTT broker IP
 
 WiFiClient espClient;
 PubSubClient client(espClient);
